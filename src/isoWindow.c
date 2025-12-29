@@ -1,55 +1,87 @@
 #include "isoWindow.h"
+#include "world.h"
+#include <math.h>
 
-int offsetX = 0;
-int offsetY = 0;
 float zoom = 1.0f; // Default zoom level
 int rotation = 0;
+float cameraIsoX = 0.0f;
+float cameraIsoY = 0.0f;
 
-void getIsoScreenPos(int isoX, int isoY, int* screenX, int* screenY){
-	// Apply rotation to get rotated isometric coordinates
-	int rotX = 0, rotY = 0;
-	getRotatedIsoPos(isoX, isoY, &rotX, &rotY);
+void projectWorldToScreen(float worldX, float worldY, int* screenX, int* screenY){
+	float relX = worldX - cameraIsoX;
+	float relY = worldY - cameraIsoY;
 
-	// Standard isometric projection, scaled by zoom
-	*screenX = (rotX - rotY) * (BASE_HALF_TILE_WIDTH * zoom);
-	*screenY = (rotX + rotY) * (BASE_HALF_TILE_HEIGHT * zoom);
+	float rot_relX, rot_relY;
+	switch(rotation){
+		case 0:
+			rot_relX = relX;
+			rot_relY = relY;
+			break;
+		case 90:
+			rot_relX = relY;
+			rot_relY = -relX;
+			break;
+		case 180:
+			rot_relX = -relX;
+			rot_relY = -relY;
+			break;
+		case 270:
+			rot_relX = -relY;
+			rot_relY = relX;
+			break;
+		default:
+			rot_relX = relX;
+			rot_relY = relY;
+			break;
+	}
+
+	float projX = (rot_relX - rot_relY) * BASE_HALF_TILE_WIDTH *zoom;
+	float projY = (rot_relX + rot_relY) * BASE_HALF_TILE_HEIGHT *zoom;
+
+	*screenX = (int)(projX + 0.5f + WINDOW_WIDTH / 2.0f);
+	*screenY = (int)(projY + 0.5f + WINDOW_HEIGHT / 2.0f + 0.5f);
 }
 
-void getRotatedIsoPos(int isoX, int isoY, int* rotX, int* rotY){
-	// Center the grid around (7,7) for rotation
-	int centerX = GRID_SIZE / 2;
-	int centerY = GRID_SIZE / 2;
-	int relX = isoX - centerX;
-	int relY = isoY - centerY;
+void unprojectScreenToWorldRel(float screenRelX, float screenRelY, float* relX, float* relY){
+	float px = screenRelX / (BASE_HALF_TILE_WIDTH * zoom);
+	float py = screenRelY / (BASE_HALF_TILE_HEIGHT * zoom);
 
-	// Rotate based on current rotation (0, 90, 180, 270)
+	float isoX = (px + py) / 2.0f;
+	float isoY = (py - px) / 2.0f;
+
 	switch(rotation){
-		case 0:   // No rotation
-			*rotX = isoX;
-			*rotY = isoY;
+		case 0:
+			*relX = isoX;
+			*relY = isoY;
 			break;
-		case 90:  // 90° clockwise
-			*rotX = centerX + relY;
-			*rotY = centerY - relX;
+		case 90:
+			*relX = -isoY;
+			*relY = isoX;
 			break;
-		case 180: // 180°
-			*rotX = centerX - relX;
-			*rotY = centerY - relY;
+		case 180:
+			*relX = -isoX;
+			*relY = -isoY;
 			break;
-		case 270: // 270° clockwise
-			*rotX = centerX - relY;
-			*rotY = centerY + relX;
+		case 270:
+			*relX = isoY;
+			*relY = -isoX;
 			break;
+		default:
+			*relX = isoX;
+			*relY = isoY;
+			break;
+		
 	}
 }
 
-void initIsoOffsets(void){
-	updateIsoOffsets();
+void centerCameraOn(float worldX, float worldY){
+	cameraIsoX = worldX;
+	cameraIsoY = worldY;
+	clampCamera();
 }
 
-void updateIsoOffsets(void){
-	int centerX, centerY;
-	getIsoScreenPos(GRID_SIZE / 2, GRID_SIZE / 2, &centerX, &centerY);
-	offsetX = WINDOW_WIDTH / 2 - centerX;
-	offsetY = WINDOW_HEIGHT / 2 - centerY;
+void clampCamera(void){
+	float half = VISIBLE_GRID_SIZE / 2.0f;
+	cameraIsoX = fmaxf(half, fminf((float)MAP_SIZE - half, cameraIsoX));
+	cameraIsoY = fmaxf(half, fminf((float)MAP_SIZE - half, cameraIsoY));
 }

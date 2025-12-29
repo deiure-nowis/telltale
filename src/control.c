@@ -1,55 +1,27 @@
 #include "control.h"
 #include "isoWindow.h"
+#include "world.h"
 #include <stdio.h>
 #include <math.h>
 
 int getTileUnderMouse(int mouseX, int mouseY, int* isoX, int* isoY){
-	// Reverse the offset and zoom
-	int relX = (mouseX - offsetX) / zoom;
-	int relY = (mouseY - offsetY - BASE_HALF_TILE_HEIGHT) / zoom;
+	float relX, relY;
+	float srelX = (float)mouseX - WINDOW_WIDTH / 2.0f;
+	float srelY = (float)mouseY - WINDOW_HEIGHT / 2.0f - BASE_HALF_TILE_HEIGHT;
+	unprojectScreenToWorldRel(srelX, srelY, &relX, &relY);
 
-	// Convert screen coordinates back to isometric grid
-	// Formula derived from: screenX = (isoX - isoY) * HALF_TILE_WIDTH
-	//                     screenY = (isoX + isoY) * HALF_TILE_HEIGHT
+	float wx = cameraIsoX + relX;
+	float wy = cameraIsoY + relY;
 
-	float px = relX / (float)BASE_HALF_TILE_WIDTH;
-	float py = relY / (float)BASE_HALF_TILE_HEIGHT;
+	int ix = (int)roundf(wx);
+	int iy = (int)roundf(wy);
 
-	float gridX = (px + py) / 2.0f;
-	float gridY = (py - px) / 2.0f;
-
-	// Reverse rotation
-	int centerX = GRID_SIZE / 2;
-	int centerY = GRID_SIZE / 2;
-	int rotGridX = (int)(gridX + 0.5f);
-	int rotGridY = (int)(gridY + 0.5f);
-	int relRotX = rotGridX - centerX;
-	int relRotY = rotGridY - centerY;
-
-	switch(rotation){
-		case 0:   // No rotation
-			*isoX = rotGridX;
-			*isoY = rotGridY;
-			break;
-		case 90:  // 90° clockwise
-			*isoX = centerX - relRotY;
-			*isoY = centerY + relRotX;
-			break;
-		case 180: // 180°
-			*isoX = centerX - relRotX;
-			*isoY = centerY - relRotY;
-			break;
-		case 270: // 270° clockwise
-			*isoX = centerX + relRotY;
-			*isoY = centerY - relRotX;
-			break;
+	if(ix>=0 && ix<MAP_SIZE && iy>=0 && iy<MAP_SIZE){
+		*isoX = ix;
+		*isoY = iy;
+		return 1;
 	}
-
-	// Check bounds
-	if (*isoX < 0 || *isoX >= GRID_SIZE || *isoY < 0 || *isoY >= GRID_SIZE)
-		return 0;
-
-	return 1;
+	return 0;
 }
 
 void handleInput(int* running, Player* player, const World* world){
@@ -65,24 +37,50 @@ void handleInput(int* running, Player* player, const World* world){
 				findPath(player, destX, destY, world);
 		}else if(event.type == SDL_MOUSEWHEEL){
 			if(event.wheel.y > 0){ // Wheel up: zoom in
-				zoom = zoom * 1.1f;
-				if(zoom>2.0f) zoom = 2.0f; // Max zoom
+				zoom *= 1.1f;
+				if(zoom>MAX_ZOOM) zoom = MAX_ZOOM;
 			}else if(event.wheel.y < 0){ // Wheel down: zoom out
-				zoom = zoom / 1.1f;
-				if(zoom < 0.5f) zoom = 0.5f; // Min zoom
+				zoom /= 1.1f;
+				if(zoom < MIN_ZOOM) zoom = MIN_ZOOM;
 			}
-			updateIsoOffsets(); // Recenter after zoom
 		}else if(event.type == SDL_KEYDOWN){
 			switch(event.key.keysym.sym){
-				case SDLK_LEFT:
-					rotation = (rotation - 90 + 360) % 360; // Counter-clockwise
-					updateIsoOffsets();
+				case SDLK_SPACE:
+					centerCameraOn((float)player->isoX, (float)player->isoY);
 					break;
-				case SDLK_RIGHT:
+				case SDLK_z:
+					rotation = (rotation - 90 + 360) % 360; // Counter-clockwise
+					break;
+				case SDLK_c:
 					rotation = (rotation + 90) % 360; // Clockwise
-					updateIsoOffsets();
 					break;
 			}
 		}
+	}
+}
+
+void updateContinuousInput(float deltaTime){
+	const Uint8* keyState = SDL_GetKeyboardState(NULL);
+
+	float panSpeed = CAMERA_PAN_SPEED * deltaTime; // pixels per second at screen space
+	float dx = 0.0f, dy = 0.0f;
+
+	if(keyState[SDL_SCANCODE_W]) dy -= panSpeed;
+	if(keyState[SDL_SCANCODE_S]) dy += panSpeed;
+	if(keyState[SDL_SCANCODE_A]) dx -= panSpeed;
+	if(keyState[SDL_SCANCODE_D]) dx += panSpeed;
+
+	if(dx != 0.0f && dy != 0.0f){
+		float len = sqrtf(dx*dx + dy*dy);
+		dx = (dx / len) * panSpeed;
+		dy = (dy / len) * panSpeed;
+	}
+
+	if(dx != 0.0f || dy != 0.0f){
+		float worldDx, worldDy;
+		unprojectScreenToWorldRel(dx, dy, &worldDx, &worldDy);
+		cameraIsoX += worldDx;
+		cameraIsoY += worldDy;
+		clampCamera();
 	}
 }

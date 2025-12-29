@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <math.h>
 #include "isoWindow.h"
 #include "isoGraphic.h"
 #include "control.h"
@@ -25,8 +26,7 @@ int main(int argc, char* argv[]) {
 		SDL_Quit();
 		return 1;
 	}
-
-	initIsoOffsets();
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
 	Player player;
 	initPlayer(&player);
@@ -34,17 +34,24 @@ int main(int argc, char* argv[]) {
 	World world;
 	initWorld(&world);
 
+	centerCameraOn((float)player.isoX, (float)player.isoY);
+
 	int running = 1;
 	int hoverIsoX = -1, hoverIsoY = -1;
+	Uint64 prevTime = SDL_GetTicks64();
 
 	while (running) {
-		handleInput(&running, &player, &world);
+		Uint64 currTime = SDL_GetTicks64();
+		float deltaTime = (float)((currTime - prevTime) / 1000.0);
+		if(deltaTime > 0.1f) deltaTime = 0.1f; // Cap max dt
+		prevTime = currTime;
 
-		// Get current mouse state
+		handleInput(&running, &player, &world);
+		updateContinuousInput(deltaTime);
+
+		// Mouse hover update
 		int mouseX, mouseY;
 		SDL_GetMouseState(&mouseX, &mouseY);
-
-		// Update hover tile
 		if(getTileUnderMouse(mouseX, mouseY, &hoverIsoX, &hoverIsoY)){
 			// Valid tile
 		}else{
@@ -55,6 +62,8 @@ int main(int argc, char* argv[]) {
 
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); // Black background
 		SDL_RenderClear(renderer);
+
+		updateTileAnimations(deltaTime, &world);
 
 		drawScene(renderer, hoverIsoX, hoverIsoY, &player, &world);
 

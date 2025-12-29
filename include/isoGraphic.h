@@ -5,6 +5,7 @@
 #include "player.h"
 #include "world.h"
 
+void updateTileAnimations(float deltaTime, World* world);
 void drawGrid(SDL_Renderer* renderer, int hoverIsoX, int hoverIsoY, const World* world);
 void drawScene(SDL_Renderer* renderer, int hoverIsoX, int hoverIsoY, const Player* player, const World* world);
 

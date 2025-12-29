@@ -1,15 +1,20 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#define MAP_SIZE 15
+#define MAP_SIZE 100
 
-typedef enum {
-    TILE_WALKABLE,    // E.g., grass
-    TILE_NON_WALKABLE // E.g., rock or wall
+typedef enum{
+	TILE_WALKABLE,    // E.g., grass
+	TILE_NON_WALKABLE // E.g., rock or wall
 } TileType;
 
-typedef struct {
-    TileType tiles[MAP_SIZE][MAP_SIZE];
+typedef struct{
+	float alpha;
+} TileParams;
+
+typedef struct{
+	TileType tiles[MAP_SIZE][MAP_SIZE];
+	TileParams params[MAP_SIZE][MAP_SIZE];
 } World;
 
 void initWorld(World* world);

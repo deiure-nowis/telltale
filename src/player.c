@@ -1,7 +1,9 @@
 #include "player.h"
 #include "isoWindow.h"
+#include "world.h"
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 typedef struct{
 	int x, y;		// Grid position
@@ -47,9 +49,9 @@ static int manhattanDistance(int x1, int y1, int x2, int y2){
 }
 
 void initPlayer(Player* player) {
-	player->isoX = 7;        // Center of 15x15 grid
-	player->isoY = 7;
-	player->dir = DIR_SE;    // Start facing southeast
+	player->isoX = MAP_SIZE / 2; // Center of map grid
+	player->isoY = MAP_SIZE / 2;
+	player->dir = DIR_SE; // Start facing southeast
 	player->pathLength = 0;
 	player->pathIndex = 0;
 	player->moving = 0;
@@ -104,7 +106,7 @@ void findPath(Player* player, int destX, int destY, const World* world){
 			// Reconstruct path
 			player->pathLength = 0;
 			int x = destX, y = destY;
-			while(/*x!=-1 && y!=-1*/ !(x==player->isoX && y==player->isoY)){
+			while(!(x==player->isoX && y==player->isoY)){
 				player->path[player->pathLength++] = (Point){x, y};
 				int px = parentX[y][x];
 				int py = parentY[y][x];
@@ -138,9 +140,9 @@ void findPath(Player* player, int destX, int destY, const World* world){
 			parentX[ny][nx] = cx;
 			parentY[ny][nx] = cy;
 
-			Node neighbor = {nx, ny, newG, manhattanDistance(nx, ny, destX, destY), 0, cx, cy};
-			neighbor.f = neighbor.g + neighbor.h;
-			pqPush(&openList, neighbor);
+			int h = manhattanDistance(nx, ny, destX, destY);
+			Node newNode = {nx, ny, newG, h, newG + h, cx, cy};
+			pqPush(&openList, newNode);
 		}
 	}
 
@@ -187,12 +189,10 @@ void updatePlayer(Player* player, const World* world){
 
 void drawPlayer(SDL_Renderer* renderer, const Player* player){
 	int screenX, screenY;
-	getIsoScreenPos(player->isoX, player->isoY, &screenX, &screenY);
-	screenX += offsetX;
-	screenY += offsetY;
+	projectWorldToScreen((float)player->isoX, (float)player->isoY, &screenX, &screenY);
 
-	int hw = BASE_HALF_TILE_WIDTH * zoom;
-	int hh = BASE_HALF_TILE_HEIGHT * zoom;
+	int hw = (int)(BASE_HALF_TILE_WIDTH * zoom);
+	int hh = (int)(BASE_HALF_TILE_HEIGHT * zoom);
 
 	// Draw gray rectangle
 	SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255); // Gray
@@ -215,10 +215,8 @@ void drawPlayer(SDL_Renderer* renderer, const Player* player){
 		SDL_RenderDrawLine(renderer, left_x, y, right_x, y);
 	}
 
-	// Draw red direction vector
+	// Draw red direction indicator
 	SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // Red
-	int vecEndX = screenX;
-	int vecEndY = screenY + hh; // Default to center of diamond
 
 	// Adjust direction based on rotation
 	Direction rotDir = player->dir;
@@ -242,6 +240,9 @@ void drawPlayer(SDL_Renderer* renderer, const Player* player){
 			else if (player->dir == DIR_SW) rotDir = DIR_NW;
 			break;
 	}
+
+	int vecEndX = screenX;
+	int vecEndY = screenY + hh;
 
 	switch(rotDir){
 		case DIR_SE:
