@@ -7,9 +7,9 @@
 
 // Returns 1 if mouse is over a valid tile, and fills isoX/isoY with tile coordinates
 // Returns 0 if mouse is outside the grid
-int getTileUnderMouse(int mouseX, int mouseY, int* isoX, int* isoY);
+int screenToIsoGrid(int mouseX, int mouseY, int* isoX, int* isoY);
 
-void handleInput(int* running, Player* player, const World* world);
+void handleInput(int* running, Player* player, World* world);
 void updateContinuousInput(float deltaTime);
 
 #endif // CONTROL_H

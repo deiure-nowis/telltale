@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <math.h>
 
-int getTileUnderMouse(int mouseX, int mouseY, int* isoX, int* isoY){
+int screenToIsoGrid(int mouseX, int mouseY, int* isoX, int* isoY){
 	float relX, relY;
 	float srelX = (float)mouseX - WINDOW_WIDTH / 2.0f;
 	float srelY = (float)mouseY - WINDOW_HEIGHT / 2.0f - BASE_HALF_TILE_HEIGHT;
@@ -24,7 +24,15 @@ int getTileUnderMouse(int mouseX, int mouseY, int* isoX, int* isoY){
 	return 0;
 }
 
-void handleInput(int* running, Player* player, const World* world){
+static Tile* getTileUnderCursor(World* world){
+	int mx, my, tx, ty;
+	SDL_GetMouseState(&mx, &my);
+	if(screenToIsoGrid(mx, my, &tx, &ty))
+		return &world->grid[ty][tx];
+	return NULL;
+}
+
+void handleInput(int* running, Player* player, World* world){
 	SDL_Event event;
 	while(SDL_PollEvent(&event)){
 		if(event.type == SDL_QUIT){
@@ -33,7 +41,7 @@ void handleInput(int* running, Player* player, const World* world){
 			int mouseX = event.button.x;
 			int mouseY = event.button.y;
 			int destX, destY;
-			if(getTileUnderMouse(mouseX, mouseY, &destX, &destY))
+			if(screenToIsoGrid(mouseX, mouseY, &destX, &destY))
 				findPath(player, destX, destY, world);
 		}else if(event.type == SDL_MOUSEWHEEL){
 			if(event.wheel.y > 0){ // Wheel up: zoom in
@@ -54,6 +62,16 @@ void handleInput(int* running, Player* player, const World* world){
 				case SDLK_c:
 					rotation = (rotation + 90) % 360; // Clockwise
 					break;
+				case SDLK_e:{
+					Tile* t = getTileUnderCursor(world);
+					if(t) t->variantX = (t->variantX + 1) % X_VARIANT;
+					break;
+				}
+				case SDLK_r:{
+					Tile* t = getTileUnderCursor(world);
+					if(t) t->variantY = (t->variantY + 1) % Y_VARIANT;
+					break;
+				}
 			}
 		}
 	}

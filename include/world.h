@@ -1,7 +1,12 @@
 #ifndef WORLD_H
 #define WORLD_H
 
+#include <stdint.h>
+
 #define MAP_SIZE 100
+
+#define X_VARIANT 4
+#define Y_VARIANT 3
 
 typedef enum{
 	TILE_WALKABLE,    // E.g., grass
@@ -9,12 +14,14 @@ typedef enum{
 } TileType;
 
 typedef struct{
+	TileType type;
+	uint8_t variantX;
+	uint8_t variantY;
 	float alpha;
-} TileParams;
+} Tile;
 
 typedef struct{
-	TileType tiles[MAP_SIZE][MAP_SIZE];
-	TileParams params[MAP_SIZE][MAP_SIZE];
+	Tile grid[MAP_SIZE][MAP_SIZE];
 } World;
 
 void initWorld(World* world);

@@ -1,5 +1,5 @@
 #include <SDL2/SDL.h>
-#include <math.h>
+#include <SDL2/SDL_image.h>
 #include "isoWindow.h"
 #include "isoGraphic.h"
 #include "control.h"
@@ -28,6 +28,9 @@ int main(int argc, char* argv[]) {
 	}
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
+	GameAssets assets;
+	initAssets(renderer, &assets);
+
 	Player player;
 	initPlayer(&player);
 
@@ -52,7 +55,7 @@ int main(int argc, char* argv[]) {
 		// Mouse hover update
 		int mouseX, mouseY;
 		SDL_GetMouseState(&mouseX, &mouseY);
-		if(getTileUnderMouse(mouseX, mouseY, &hoverIsoX, &hoverIsoY)){
+		if(screenToIsoGrid(mouseX, mouseY, &hoverIsoX, &hoverIsoY)){
 			// Valid tile
 		}else{
 			hoverIsoX = hoverIsoY = -1;
@@ -65,14 +68,15 @@ int main(int argc, char* argv[]) {
 
 		updateTileAnimations(deltaTime, &world);
 
-		drawScene(renderer, hoverIsoX, hoverIsoY, &player, &world);
+		drawScene(renderer, hoverIsoX, hoverIsoY, &player, &world, &assets);
 
 		SDL_RenderPresent(renderer);
-		SDL_Delay(16);
+		SDL_Delay(8);
 	}
 
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
+	destroyAssets(&assets);
 	SDL_Quit();
 	return 0;
 }

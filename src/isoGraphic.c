@@ -4,58 +4,66 @@
 #include "world.h"
 #include <math.h>
 
-static void drawTile(SDL_Renderer* renderer, int isoX, int isoY, int isHovered, TileType tileType, TileParams tileParams) {
+static SDL_Texture* loadTexture(SDL_Renderer* renderer, const char* path){
+	SDL_Surface* surface = IMG_Load(path);
+	if(!surface){
+		SDL_Log("Failed to load image %s: %s", path, IMG_GetError());
+		return NULL;
+	}
+	SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+	SDL_FreeSurface(surface);
+	return texture;
+}
+
+void initAssets(SDL_Renderer* renderer, GameAssets* assets){
+	assets->tileGrass = loadTexture(renderer, "assets/images/tileAssets.png");
+}
+
+void destroyAssets(GameAssets* assets){
+	if(assets->tileGrass) SDL_DestroyTexture(assets->tileGrass);
+}
+
+static void drawTile(SDL_Renderer* renderer, int isoX, int isoY, int isHovered, Tile tile, const GameAssets* assets) {
 	int tx, ty;
 	projectWorldToScreen((float)isoX, (float)isoY, &tx, &ty);
 
 	// Apply height drop and alpha
-	float dropOffset = (1.0f - tileParams.alpha) * 100.0f;
+	float dropOffset = (1.0f - tile.alpha) * 100.0f;
 	ty += (int)dropOffset;
-	Uint8 a = (Uint8)(tileParams.alpha * 255);
+	Uint8 a = (Uint8)(tile.alpha * 255);
 
-	int hw = (int)(BASE_HALF_TILE_WIDTH * zoom);
-	int hh = (int)(BASE_HALF_TILE_HEIGHT * zoom);
+	if(!assets->tileGrass) return;
+	SDL_Texture* texture = assets->tileGrass;
 
-	// Fill
+	// dest rect set
+	SDL_Rect destRect;
+	int texW = 64;
+	int texH = 48;
+	destRect.w = (int)(texW * zoom);
+	destRect.h = (int)(texH * zoom);
+
+	destRect.x = tx - (destRect.w / 2);
+	destRect.y = ty;
+
+	// source rect set
+	SDL_Rect srcRect;
+	int nativeW = 32;
+	int nativeH = 24;
+	srcRect.x = tile.variantX * nativeW;
+	srcRect.y = tile.variantY * nativeH;
+	srcRect.w = nativeW;
+	srcRect.h = nativeH;
+
+	SDL_SetTextureAlphaMod(texture, a);
+
+	// Hover
 	if(isHovered){
-		SDL_SetRenderDrawColor(renderer, 100, 255, 100, a); // Light green
-	}else if(tileType == TILE_WALKABLE){
-		SDL_SetRenderDrawColor(renderer, 0, 200, 0, a); // Regular grass green
+		SDL_SetTextureColorMod(texture, 155, 200, 155);
 	}else{
-		SDL_SetRenderDrawColor(renderer, 53, 53, 0, a); // Brown
+		SDL_SetTextureColorMod(texture, 255, 255, 255);
 	}
 
-	// Upper half
-	for (int y = ty; y < ty + hh; ++y) {
-		int y_rel = y - ty;
-		int dx = (y_rel * hw) / hh;
-		int left_x = tx - dx;
-		int right_x = tx + dx;
-		SDL_RenderDrawLine(renderer, left_x, y, right_x, y);
-	}
-
-	// Lower half
-	for (int y = ty + hh; y < ty + 2 * hh; ++y) {
-		int y_rel = y - (ty + hh);
-		int dx = (y_rel * hw) / hh;
-		int left_x = (tx - hw) + dx;
-		int right_x = (tx + hw) - dx;
-		SDL_RenderDrawLine(renderer, left_x, y, right_x, y);
-	}
-
-	// Border
-	if(isHovered){
-		SDL_SetRenderDrawColor(renderer, 255, 255, 100, a); // Yellow highlight
-	}else if(tileType == TILE_WALKABLE){
-		SDL_SetRenderDrawColor(renderer, 0, 100, 0, a); // Dark green border
-	}else{
-		SDL_SetRenderDrawColor(renderer, 162, 124, 91, a); // Light brown
-	}
-
-	SDL_RenderDrawLine(renderer, tx, ty, tx + hw, ty + hh); // top to right
-	SDL_RenderDrawLine(renderer, tx + hw, ty + hh, tx, ty + 2 * hh); // right to bottom
-	SDL_RenderDrawLine(renderer, tx, ty + 2 * hh, tx - hw, ty + hh); // bottom to left
-	SDL_RenderDrawLine(renderer, tx - hw, ty + hh, tx, ty); // left to top
+	SDL_RenderCopy(renderer, texture, &srcRect, &destRect);
 }
 
 void updateTileAnimations(float deltaTime, World* world){
@@ -77,16 +85,17 @@ void updateTileAnimations(float deltaTime, World* world){
 
 	for(int y=searMinY; y<=searMaxY; y++){
 		for(int x=searMinX; x<=searMaxX; x++){
-			TileParams* v = &world->params[y][x];
+			Tile* tile = &world->grid[y][x];
 			int isVisible = (x>=minX && x<=maxX && y>=minY && y<=maxY);
 
-			v->alpha += (isVisible - v->alpha) * speed;
-			if(v->alpha < 0.01f) v->alpha = 0.0f;
+			tile->alpha += (isVisible - tile->alpha) * speed;
+			if(tile->alpha < 0.01f) tile->alpha = 0.0f;
+			if(tile->alpha > 0.99f) tile->alpha = 1.0f;
 		}
 	}
 }
 
-void drawGrid(SDL_Renderer* renderer, int hoverIsoX, int hoverIsoY, const World* world){
+void drawGrid(SDL_Renderer* renderer, int hoverIsoX, int hoverIsoY, const World* world, const GameAssets* assets){
 	int half = VISIBLE_GRID_SIZE / 2;
 
 	int min_isoX = (int)cameraIsoX - half;
@@ -100,23 +109,51 @@ void drawGrid(SDL_Renderer* renderer, int hoverIsoX, int hoverIsoY, const World*
 	int anim_maxX = max_isoX + 5;
 	int anim_maxY = max_isoY + 5;
 
+	// Clamp
 	if(anim_minX < 0) anim_minX = 0;
 	if(anim_minY < 0) anim_minY = 0;
 	if(anim_maxX > MAP_SIZE - 1) anim_maxX = MAP_SIZE - 1;
 	if(anim_maxY > MAP_SIZE - 1) anim_maxY = MAP_SIZE - 1;
 
-	for(int isoY=anim_minY; isoY<=anim_maxY; ++isoY){
-		for(int isoX=anim_minX; isoX<=anim_maxX; ++isoX){
-			int isHovered = (isoX == hoverIsoX && isoY == hoverIsoY);
-			TileType tileType = world->tiles[isoY][isoX];
-			TileParams tileParams = world->params[isoY][isoX];
-			drawTile(renderer, isoX, isoY, isHovered, tileType, tileParams);
+	// Depth sorting
+	int xs, xe, xstep;
+	int ys, ye, ystep;
+	switch(rotation){
+		case 0:
+			xs = anim_minX; xe = anim_maxX; xstep = 1;
+			ys = anim_minY; ye = anim_maxY; ystep = 1;
+			break;
+		case 90:
+			xs = anim_maxX; xe = anim_minX; xstep = -1;
+			ys = anim_minY; ye = anim_maxY; ystep = 1;
+			break;
+		case 180:
+			xs = anim_maxX; xe = anim_minX; xstep = -1;
+			ys = anim_maxY; ye = anim_minY; ystep = -1;
+			break;
+		case 270:
+			xs = anim_minX; xe = anim_maxX; xstep = 1;
+			ys = anim_maxY; ye = anim_minY; ystep = -1;
+			break;
+		default:
+			xs = anim_minX; xe = anim_maxX; xstep = 1;
+			ys = anim_minX; ye = anim_maxX; ystep = 1;
+			break;
+	}
+
+	for(int isoY=ys; isoY!=ye + ystep; isoY+=ystep){
+		for(int isoX=xs; isoX!=xe + xstep; isoX+=xstep){
+			if(world->grid[isoY][isoX].type == TILE_WALKABLE){
+				int isHovered = (isoX == hoverIsoX && isoY == hoverIsoY);
+				Tile tile = world->grid[isoY][isoX];
+				drawTile(renderer, isoX, isoY, isHovered, tile, assets);
+			}
 		}
 	}
 }
 
-void drawScene(SDL_Renderer* renderer, int hoverIsoX, int hoverIsoY, const Player* player, const World* world){
-	drawGrid(renderer, hoverIsoX, hoverIsoY, world);
+void drawScene(SDL_Renderer* renderer, int hoverIsoX, int hoverIsoY, const Player* player, const World* world, const GameAssets* assets){
+	drawGrid(renderer, hoverIsoX, hoverIsoY, world, assets);
 
 	int half = VISIBLE_GRID_SIZE / 2;
 	int min_isoX = (int)cameraIsoX - half;
